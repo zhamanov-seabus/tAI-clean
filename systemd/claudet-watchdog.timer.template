@@ -1,0 +1,7 @@
+[Unit]
+Description=Run claudet watchdog every 90s
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=90
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=claudet watchdog (heartbeat + context-guard)
+[Service]
+Type=oneshot
+Environment=HOME=__HOME__
+Environment=PATH=__HOME__/.bun/bin:__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=__HOME__/.local/bin/claudet-watchdog

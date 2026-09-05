@@ -1,0 +1,16 @@
+[Unit]
+Description=claudet — always-on Claude Code Telegram daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=__HOME__
+Environment=PATH=__HOME__/.bun/bin:__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=__TAI_HOME__
+ExecStart=__HOME__/.local/bin/claudet-launchd
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

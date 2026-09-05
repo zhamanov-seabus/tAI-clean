@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "tai-memory": {
+      "command": "__TAI_HOME__/.venv/bin/tai-mem-mcp"
+    }
+  }
+}

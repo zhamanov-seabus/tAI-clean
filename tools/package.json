@@ -1,0 +1,6 @@
+{
+  "name": "tai-image-tools",
+  "private": true,
+  "type": "module",
+  "dependencies": { "playwright-core": "^1.60.0" }
+}

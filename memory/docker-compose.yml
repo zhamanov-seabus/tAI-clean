@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: tai-memory-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tai
+      POSTGRES_PASSWORD: tai
+      POSTGRES_DB: tai_memory
+    ports:
+      - "5544:5432"
+    volumes:
+      - tai-memory-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tai -d tai_memory"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  tai-memory-pgdata:

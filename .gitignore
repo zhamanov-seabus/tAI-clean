@@ -1,0 +1,23 @@
+# Secrets — never commit
+.env
+.env.local
+*token*
+access.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Build / OS
+dist/
+build/
+.DS_Store
+
+# tai-memory runtime state
+.tai-mem-current-session
+**/settings.local.json

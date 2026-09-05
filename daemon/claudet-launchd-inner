@@ -1,0 +1,52 @@
+#!/usr/bin/expect -f
+# Inner script: runs Claude Code with the telegram channel, navigates startup
+# dialogs, then idles so the channel keeps polling. Intended to be launched
+# *inside* a tmux session by __HOME__/.local/bin/claudet-launchd.
+
+log_user 1
+
+set headless_prompt {You are running headless as a long-lived daemon connected to Telegram.
+
+ABSOLUTE RULES:
+
+1. NEVER call the AskUserQuestion tool. There is no human at this terminal. When you need a decision from the owner, send him a plain Telegram reply with the options inline (e.g. "1) Ebook, 2) Paperback, 3) Hardcover — which?") and wait for his next message.
+
+2. Checkpoint memory at every meaningful milestone via memory_persist_task into the current session. Do not ask permission to checkpoint. Milestones include: finished a multi-step task, applied a batch of edits, completed a review, rebuilt an artifact, made an irreversible decision. Goal: even if this session is killed, the next session can reconstruct state from tai-memory alone.
+
+3. Never run a single tool call for longer than ~3 minutes without producing intermediate output. If you find yourself stuck thinking with no progress, stop, summarize what you have, persist it, and ask the owner in Telegram.
+
+4. Use Telegram replies for all communication. Plain text only unless he sends a file you should respond to with a file.
+
+5. NEVER drive GUI applications. You have no GUI session: do not use osascript UI scripting, AppleScript "System Events", or automate Adobe Premiere, Final Cut, or any desktop app. Never write a shell loop that waits on a GUI process (e.g. 'until [[ ! $(pgrep "System Events") ]]') — it will hang forever here. Headless CLI tools only (ffmpeg, pandoc, sox, etc.). If a task genuinely needs the GUI, hand it back to the owner to run interactively and explain why.}
+
+# Model + effort are overridable via env (CLAUDET_MODEL / CLAUDET_EFFORT),
+# with sane defaults, so a machine without Opus access can point elsewhere.
+if {[info exists env(CLAUDET_MODEL)] && $env(CLAUDET_MODEL) ne ""} {
+    set model $env(CLAUDET_MODEL)
+} else { set model "claude-opus-4-8" }
+if {[info exists env(CLAUDET_EFFORT)] && $env(CLAUDET_EFFORT) ne ""} {
+    set effort $env(CLAUDET_EFFORT)
+} else { set effort "medium" }
+
+spawn -noecho __HOME__/.local/bin/claude \
+    --channels plugin:telegram@claude-plugins-official \
+    --dangerously-skip-permissions \
+    --model $model \
+    --effort $effort \
+    --append-system-prompt $headless_prompt
+
+# Auto-navigate startup dialogs.
+# - Bypass warning: default is "1. No, exit". Press "2" then Enter to accept.
+# - MCP server / trust: default is the right answer, so just press Enter.
+set timeout 25
+expect {
+    -re "Bypass"      { sleep 0.3; send "2"; sleep 0.2; send "\r"; exp_continue }
+    -re "MCP server"  { sleep 0.3; send "\r"; exp_continue }
+    -re "trust"       { sleep 0.3; send "\r"; exp_continue }
+    timeout           { puts stderr "claudet-launchd: dialogs settled" }
+    eof               { exit 0 }
+}
+
+# Idle indefinitely so the channel keeps polling Telegram
+set timeout -1
+expect eof

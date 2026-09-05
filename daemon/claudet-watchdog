@@ -1,0 +1,105 @@
+#!/bin/bash
+# Heartbeat watchdog for the com.claudet Telegram daemon.
+# Run by launchd (com.claudet-watchdog) on a fixed interval.
+#
+# It verifies the daemon is actually alive — not just registered with launchd —
+# and force-restarts + alerts if it has silently died. KeepAlive handles most
+# crashes; this is the safety net for the cases KeepAlive misses.
+set -u
+
+LABEL="com.claudet"
+TMUX=__TMUX_BIN__
+SOCKET=claudet
+SESSION=claudet
+NOTIFY=__HOME__/.local/bin/claudet-notify
+UID_NUM=$(id -u)
+ALERT_STAMP=/tmp/claudet-watchdog-last-alert
+LOG=__HOME__/Library/Logs/claudet-watchdog.log
+ALERT_THROTTLE=600   # don't alert more than once per 10 min
+
+# --- Context-size auto-restart config (env-overridable from the plist) ---
+PROJ_DIR=__PROJ_DIR__
+CTX_TOOL=__HOME__/.local/bin/claudet-ctx-tokens
+TAI_MEM=__TAI_HOME__/.venv/bin/tai-mem
+CTX_RESTART=${CLAUDET_CTX_RESTART:-1}        # 1=enabled, 0=off
+CTX_THRESHOLD=${CLAUDET_CTX_THRESHOLD:-500000}   # restart when context >= this many tokens
+CTX_IDLE_QUIET=${CLAUDET_CTX_IDLE_QUIET:-60}     # transcript must be untouched this long (no turn in flight)
+CTX_THROTTLE=300                              # never context-restart more than once per 5 min
+CTX_STAMP=/tmp/claudet-ctx-last-restart
+
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
+
+# Fresh-restart the daemon when its live context window grows past CTX_THRESHOLD
+# AND it is idle. The daemon launches Claude with NO --continue/--resume, so a
+# restart yields an empty-context session; durable state survives in tai-memory.
+# This keeps reasoning sharp and cuts per-turn cache-read cost, without ever
+# interrupting an in-flight turn (idle gate) and without losing the live thread
+# mid-conversation (the built-in auto-compaction handles overflow the rest of
+# the time — this is the heavier, idle-only reset).
+context_guard() {
+    [[ "$CTX_RESTART" == "1" ]] || return 0
+    [[ -x "$CTX_TOOL" ]] || return 0
+
+    local out tokens sid mtime now last
+    out=$("$CTX_TOOL" "$PROJ_DIR" 2>/dev/null) || return 0
+    tokens=${out%% *}
+    out=${out#* }; sid=${out%% *}; mtime=${out##* }
+    [[ "$tokens" =~ ^[0-9]+$ && "$mtime" =~ ^[0-9]+$ ]] || return 0
+
+    (( tokens < CTX_THRESHOLD )) && return 0
+
+    now=$(date '+%s')
+    # Idle gate: a recent transcript write means a turn is in flight — defer.
+    if (( now - mtime < CTX_IDLE_QUIET )); then
+        log "CTX high (${tokens}) but session active (<${CTX_IDLE_QUIET}s quiet) — deferring restart"
+        return 0
+    fi
+    # Throttle so a slow fresh-session startup can't trigger a restart storm.
+    last=0
+    [[ -f "$CTX_STAMP" ]] && last=$(cat "$CTX_STAMP" 2>/dev/null || echo 0)
+    (( now - last < CTX_THROTTLE )) && return 0
+    echo "$now" > "$CTX_STAMP"
+
+    log "CTX RESTART: tokens=${tokens} >= ${CTX_THRESHOLD}, session ${sid} idle ${CTX_IDLE_QUIET}s+ — checkpoint + kickstart"
+
+    # Durable breadcrumb so the fresh session can recall why it woke.
+    if [[ -x "$TAI_MEM" ]]; then
+        "$TAI_MEM" fact add "Daemon auto-restarted by context-guard at $(date '+%Y-%m-%d %H:%M'): prior session ${sid} reached ${tokens} context tokens (threshold ${CTX_THRESHOLD}) while idle, so the watchdog kickstarted a fresh empty-context session. Durable state is in tai-memory; if mid-task continuity seems missing, recall recent tasks." >/dev/null 2>&1 || true
+    fi
+
+    [[ -x "$NOTIFY" ]] && "$NOTIFY" "♻️ Контекст дорос до $((tokens/1000))k токенов, и я простаивал — делаю свежий рестарт, чтобы не терять резкость. Память сохранена, поднимусь чистым через ~10 сек." &
+
+    launchctl kickstart -k "gui/${UID_NUM}/${LABEL}" >/dev/null 2>&1
+}
+
+# If the user deliberately booted the daemon out, do nothing.
+if ! launchctl print "gui/${UID_NUM}/${LABEL}" >/dev/null 2>&1; then
+    log "daemon job not loaded — leaving it alone"
+    exit 0
+fi
+
+session_alive() { "$TMUX" -L "$SOCKET" has-session -t "$SESSION" 2>/dev/null; }
+claude_alive()  { pgrep -f "claude --channels plugin:telegram" >/dev/null 2>&1; }
+
+if session_alive && claude_alive; then
+    # Healthy. Touch heartbeat so we have a freshness record.
+    echo "$(date '+%s')" > /tmp/claudet-heartbeat
+    # Then consider a context-size fresh-restart (idle-gated, no-op if small).
+    context_guard
+    exit 0
+fi
+
+# Unhealthy: registered but not actually running.
+log "UNHEALTHY: session_alive=$(session_alive && echo yes || echo no) claude_alive=$(claude_alive && echo yes || echo no) — kickstarting"
+launchctl kickstart -k "gui/${UID_NUM}/${LABEL}" >/dev/null 2>&1
+
+# Throttled alert (the SessionStart hook will also send a green online ping
+# once the fresh session comes up; this is the explicit "I caught a death").
+now=$(date '+%s')
+last=0
+[[ -f "$ALERT_STAMP" ]] && last=$(cat "$ALERT_STAMP" 2>/dev/null || echo 0)
+if (( now - last >= ALERT_THROTTLE )); then
+    echo "$now" > "$ALERT_STAMP"
+    [[ -x "$NOTIFY" ]] && "$NOTIFY" "🔴 Watchdog: демон не отвечал, я его перезапустил. Сейчас подниму новую сессию." &
+fi
+exit 0

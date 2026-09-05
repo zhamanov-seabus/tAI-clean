@@ -1,0 +1,45 @@
+[project]
+name = "tai-memory"
+version = "0.1.0"
+description = "Two-layer persistent memory (Postgres + pgvector) for Claude Code"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "psycopg[binary,pool]>=3.2",
+    "pgvector>=0.3",
+    "fastembed>=0.4",
+    "click>=8.1",
+    "mcp>=1.0",
+    "python-dotenv>=1.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+]
+
+[project.scripts]
+tai-mem = "tai_memory.cli:main"
+tai-mem-mcp = "tai_memory.mcp_server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tai_memory"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

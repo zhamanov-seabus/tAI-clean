@@ -1,0 +1,50 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run tai-mem doctor)",
+      "Bash(uv run tai-mem sessions)",
+      "Bash(uv run tai-mem sessions *)",
+      "Bash(uv run tai-mem session show *)",
+      "Bash(uv run tai-mem recall *)",
+      "Bash(uv run ruff check *)",
+      "mcp__tai-memory__memory_recall",
+      "mcp__tai-memory__memory_recent_sessions"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__TAI_HOME__/scripts/hook-session-start.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 __TAI_HOME__/scripts/hook-telegram-forward.py"
+          },
+          {
+            "type": "command",
+            "command": "__TAI_HOME__/scripts/hook-session-stop.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__TAI_HOME__/scripts/hook-telegram-reminder.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+#!/bin/bash
+# launchd entrypoint for com.claudet.
+#
+# Wraps claudet-launchd-inner in a detached tmux session so that the daemon's
+# Claude Code TTY can be attached from any terminal via:
+#
+#     tmux -L claudet attach -t claudet
+#
+# (the -L socket name is fixed so it doesn't collide with personal tmux sessions)
+#
+# This blocks while the tmux session is alive, keeping launchd happy.
+
+set -u
+
+TMUX=__TMUX_BIN__
+SOCKET=claudet            # tmux -L socket name (separate server)
+SESSION=claudet           # tmux session name
+INNER=__HOME__/.local/bin/claudet-launchd-inner
+
+# Kill any stale session on this socket before starting a fresh one.
+"$TMUX" -L "$SOCKET" kill-session -t "$SESSION" 2>/dev/null || true
+
+# Start tmux session detached, running the expect+claude inner script.
+# remain-on-exit so we can see exit cause if claude dies.
+"$TMUX" -L "$SOCKET" new-session -d -s "$SESSION" -x 220 -y 50 "$INNER"
+
+# Block while the session lives. When it dies (claude exited cleanly or
+# crashed), launchd's KeepAlive policy decides whether to respawn us.
+while "$TMUX" -L "$SOCKET" has-session -t "$SESSION" 2>/dev/null; do
+    sleep 10
+done
+
+# The session died. We NEVER want a clean exit here: with KeepAlive
+# SuccessfulExit=false, exit 0 would make launchd leave the daemon dead
+# (the silent-death gap). Exit non-zero so launchd always respawns us.
+# A deliberate `launchctl bootout` still stops the daemon, since that
+# removes the job rather than letting it exit.
+exit 1

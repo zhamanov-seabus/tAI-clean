@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.claudet</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string><string>-i</string>
+        <string>__HOME__/.local/bin/claudet-launchd</string>
+    </array>
+    <key>WorkingDirectory</key><string>__TAI_HOME__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key><string>__HOME__/.bun/bin:__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key><string>__HOME__</string>
+        <key>BUN_INSTALL</key><string>__HOME__/.bun</string>
+        <key>CLAUDET_DAEMON</key><string>1</string>
+    </dict>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key>
+    <dict><key>SuccessfulExit</key><false/><key>Crashed</key><true/></dict>
+    <key>ThrottleInterval</key><integer>30</integer>
+    <key>StandardOutPath</key><string>__HOME__/Library/Logs/claudet.log</string>
+    <key>StandardErrorPath</key><string>__HOME__/Library/Logs/claudet.log</string>
+    <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>
